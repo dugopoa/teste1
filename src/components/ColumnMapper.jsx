@@ -1,34 +1,37 @@
-export default function ColumnMapper({ headers, onConfirm }) {
+export default function ColumnMapper({ headers, currentMap, onConfirm, onCancel }) {
   const fields = [
-    { key: 'dateTime', label: 'Data e Hora de Inserção', icon: '📅', hint: 'coluna que contém a data/hora do registro' },
-    { key: 'company',  label: 'Nome da Empresa',          icon: '🏢', hint: 'coluna que identifica a empresa' },
+    { key: 'dateTime', label: 'Data e Hora de Inserção', icon: '📅', hint: 'Usada para filtros por período' },
+    { key: 'company',  label: 'Nome da Empresa',          icon: '🏢', hint: 'Usada para agrupar no gráfico' },
   ]
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    const fd = new FormData(e.target)
-    const map = Object.fromEntries(fields.map(f => [f.key, fd.get(f.key)]))
-    if (Object.values(map).some(v => !v)) {
-      alert('Por favor, selecione uma coluna para cada campo obrigatório.')
-      return
-    }
+    const fd  = new FormData(e.target)
+    const map = Object.fromEntries(fields.map(f => [f.key, fd.get(f.key) || null]))
     onConfirm(map)
   }
 
   return (
-    <div className="card">
-      <p className="card-title">Mapear Colunas da Planilha</p>
-      <p style={{ color: 'var(--text-muted)', marginBottom: 16, fontSize: '0.875rem' }}>
-        Não foi possível identificar automaticamente as colunas. Selecione quais correspondem a cada campo.
-        Todas as outras colunas serão exibidas normalmente na tabela.
+    <div className="card column-config-card">
+      <div className="card-header">
+        <p className="card-title">⚙️ Configurar Colunas</p>
+        {onCancel && (
+          <button className="btn btn-outline" style={{ padding: '4px 12px', fontSize: '0.75rem' }} onClick={onCancel}>
+            Fechar
+          </button>
+        )}
+      </div>
+      <p style={{ color: 'var(--text-muted)', marginBottom: 16, fontSize: '0.8125rem' }}>
+        Selecione quais colunas do arquivo correspondem aos campos abaixo.
+        Os demais campos são opcionais e não impedem a visualização dos dados.
       </p>
       <form onSubmit={handleSubmit}>
         <div className="mapper-grid">
           {fields.map(({ key, label, icon, hint }) => (
             <div key={key} className="mapper-field">
               <label className="mapper-label">{icon} {label}</label>
-              <select name={key} className="mapper-select" defaultValue="">
-                <option value="" disabled>Selecione a coluna...</option>
+              <select name={key} className="mapper-select" defaultValue={currentMap?.[key] ?? ''}>
+                <option value="">(não identificado)</option>
                 {headers.map(h => (
                   <option key={h} value={h}>{h}</option>
                 ))}
@@ -37,9 +40,10 @@ export default function ColumnMapper({ headers, onConfirm }) {
             </div>
           ))}
         </div>
-        <button type="submit" className="btn btn-primary" style={{ marginTop: 20 }}>
-          Confirmar e Gerar Dashboard
-        </button>
+        <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+          <button type="submit" className="btn btn-primary">Aplicar</button>
+          {onCancel && <button type="button" className="btn btn-outline" onClick={onCancel}>Cancelar</button>}
+        </div>
       </form>
     </div>
   )

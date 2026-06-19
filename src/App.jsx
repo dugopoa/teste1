@@ -19,6 +19,9 @@ const PERIOD_LABELS = {
 }
 
 function applyDateFilter(data, filter, range) {
+  // Sem coluna de data detectada: não filtra
+  if (data.length && data[0]._dateTime === null && filter !== 'all') return data
+
   const now   = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
@@ -46,31 +49,31 @@ function applyDateFilter(data, filter, range) {
 }
 
 export default function App() {
-  const [rawRows, setRawRows]           = useState(null)
-  const [headers, setHeaders]           = useState([])
-  const [columnMap, setColumnMap]       = useState(null)
-  const [needsMapping, setNeedsMapping] = useState(false)
-  const [fileName, setFileName]         = useState('')
-  const [error, setError]               = useState('')
-  const [loading, setLoading]           = useState(false)
-  const [usingSample, setUsingSample]   = useState(false)
-  const [dateFilter, setDateFilter]     = useState('today')
-  const [customRange, setCustomRange]   = useState({ start: '', end: '' })
-  const [search, setSearch]             = useState('')
+  const [rawRows, setRawRows]               = useState(null)
+  const [headers, setHeaders]               = useState([])
+  const [columnMap, setColumnMap]           = useState(null)
+  const [fileName, setFileName]             = useState('')
+  const [error, setError]                   = useState('')
+  const [loading, setLoading]               = useState(false)
+  const [usingSample, setUsingSample]       = useState(false)
+  const [showColumnConfig, setShowColumnConfig] = useState(false)
+  const [dateFilter, setDateFilter]         = useState('all')
+  const [customRange, setCustomRange]       = useState({ start: '', end: '' })
+  const [search, setSearch]                 = useState('')
 
   const handleFile = useCallback(async (file) => {
     setLoading(true)
     setError('')
-    setNeedsMapping(false)
-    setColumnMap(null)
     setUsingSample(false)
+    setShowColumnConfig(false)
+    setSearch('')
     try {
       const { headers: h, rows, detectedMap } = await parseExcelFile(file)
       setFileName(file.name)
       setHeaders(h)
       setRawRows(rows)
-      if (detectedMap) setColumnMap(detectedMap)
-      else setNeedsMapping(true)
+      setColumnMap(detectedMap)          // sempre avança — detectedMap pode ter null parcial
+      setDateFilter(detectedMap?.dateTime ? 'today' : 'all')
     } catch (e) {
       setError(e.message)
     } finally {
@@ -78,17 +81,13 @@ export default function App() {
     }
   }, [])
 
-  const handleColumnConfirm = useCallback((map) => {
-    setColumnMap(map)
-    setNeedsMapping(false)
-  }, [])
-
   const loadSample = () => {
     setUsingSample(true)
     setError('')
-    setNeedsMapping(false)
     setRawRows(null)
     setFileName('')
+    setShowColumnConfig(false)
+    setSearch('')
     setDateFilter('7days')
     setHeaders(SAMPLE_HEADERS)
     setColumnMap(SAMPLE_COLUMN_MAP)
@@ -100,15 +99,15 @@ export default function App() {
     setFileName('')
     setColumnMap(null)
     setHeaders([])
-    setNeedsMapping(false)
     setError('')
     setSearch('')
+    setShowColumnConfig(false)
+    setDateFilter('all')
   }
 
-  // Cada linha do Excel = 1 registro
   const processedData = useMemo(() => {
     if (usingSample) return SAMPLE_DATA
-    if (!rawRows || !columnMap) return []
+    if (!rawRows)    return []
     return processRows(rawRows, columnMap)
   }, [rawRows, columnMap, usingSample])
 
@@ -121,14 +120,13 @@ export default function App() {
     )
   }, [processedData, dateFilter, customRange, search, headers])
 
-  // Total = nº de linhas; valor = linhas × 0,13
   const summary = useMemo(() => {
     const totalRecords = filteredData.length
     const totalValue   = +(filteredData.length * 0.13).toFixed(2)
 
     const byCompany = {}
     for (const r of filteredData) {
-      const co = r._company
+      const co = r._company || '(sem empresa)'
       if (!byCompany[co]) byCompany[co] = { records: 0, value: 0 }
       byCompany[co].records += 1
       byCompany[co].value    = +(byCompany[co].value + 0.13).toFixed(2)
@@ -145,7 +143,11 @@ export default function App() {
     return { totalRecords, totalValue, companies, topCompany: companies[0] ?? null, uniqueCompanies: companies.length }
   }, [filteredData])
 
-  const hasData = usingSample || (rawRows && columnMap)
+  // O dashboard é mostrado assim que há dados — sem etapa de configuração obrigatória
+  const hasData  = usingSample || rawRows != null
+  const hasDate  = !!columnMap?.dateTime
+  const hasCo    = !!columnMap?.company
+  const allGood  = hasDate && hasCo
 
   return (
     <div className="app">
@@ -156,14 +158,22 @@ export default function App() {
           <span className="header-sub">Tecnologia | IA — Controle de Envios</span>
         </div>
         {hasData && (
-          <button className="btn btn-ghost" onClick={resetDashboard}>
-            ↩ Trocar arquivo
-          </button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <button
+              className={`btn ${showColumnConfig ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setShowColumnConfig(v => !v)}
+              title="Configurar colunas"
+            >
+              ⚙️ Colunas
+            </button>
+            <button className="btn btn-ghost" onClick={resetDashboard}>↩ Trocar</button>
+          </div>
         )}
       </header>
 
       <main className="main">
-        {!hasData && !needsMapping && (
+        {/* Tela inicial */}
+        {!hasData && (
           <div className="welcome">
             <FileUpload onFile={handleFile} fileName={fileName} />
             {loading && <div className="status-msg loading">⏳ Lendo planilha...</div>}
@@ -175,10 +185,7 @@ export default function App() {
           </div>
         )}
 
-        {needsMapping && (
-          <ColumnMapper headers={headers} onConfirm={handleColumnConfirm} />
-        )}
-
+        {/* Dashboard — exibido imediatamente após carregar */}
         {hasData && (
           <>
             {usingSample && (
@@ -187,16 +194,39 @@ export default function App() {
               </div>
             )}
 
-            <DateFilter
-              value={dateFilter}
-              onChange={v => { setDateFilter(v); setSearch('') }}
-              customRange={customRange}
-              onCustomRange={setCustomRange}
-            />
+            {/* Aviso não-bloqueante quando colunas não foram detectadas */}
+            {!allGood && !showColumnConfig && (
+              <div className="status-msg warning">
+                ⚠️ {!hasDate && !hasCo
+                  ? 'Colunas de data e empresa não identificadas automaticamente.'
+                  : !hasDate ? 'Coluna de data não identificada — filtro por período desabilitado.'
+                  : 'Coluna de empresa não identificada — gráfico de participação desabilitado.'}
+                {' '}<button className="link-btn" onClick={() => setShowColumnConfig(true)}>Configurar agora</button>
+              </div>
+            )}
 
-            <SummaryCards summary={summary} periodLabel={PERIOD_LABELS[dateFilter]} />
+            {/* Painel de configuração de colunas (não-bloqueante) */}
+            {showColumnConfig && (
+              <ColumnMapper
+                headers={headers}
+                currentMap={columnMap}
+                onConfirm={(map) => { setColumnMap(map); setShowColumnConfig(false) }}
+                onCancel={() => setShowColumnConfig(false)}
+              />
+            )}
 
-            <CompanyChart companies={summary.companies} />
+            {hasDate && (
+              <DateFilter
+                value={dateFilter}
+                onChange={v => { setDateFilter(v); setSearch('') }}
+                customRange={customRange}
+                onCustomRange={setCustomRange}
+              />
+            )}
+
+            <SummaryCards summary={summary} periodLabel={PERIOD_LABELS[dateFilter] ?? 'Todos'} />
+
+            {hasCo && <CompanyChart companies={summary.companies} />}
 
             <RecordsTable
               data={filteredData}

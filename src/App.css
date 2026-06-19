@@ -229,9 +229,25 @@ body {
   font-weight: 500;
   border-left: 4px solid;
 }
-.status-msg.loading { background: #edf6ff; color: var(--navy);    border-color: var(--navy) }
-.status-msg.error   { background: #fff1f0; color: #c0392b;         border-color: #c0392b }
-.status-msg.info    { background: #f4fce0; color: var(--navy);     border-color: var(--green) }
+.status-msg.loading  { background: #edf6ff; color: var(--navy);  border-color: var(--navy) }
+.status-msg.error    { background: #fff1f0; color: #c0392b;        border-color: #c0392b }
+.status-msg.info     { background: #f4fce0; color: var(--navy);    border-color: var(--green) }
+.status-msg.warning  { background: #fffbeb; color: #92400e;        border-color: #f59e0b }
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--navy);
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+  padding: 0;
+}
+.link-btn:hover { color: var(--green-dark) }
+
+.column-config-card { border-top-color: var(--graphite) }
 
 /* ── Date Filter ─────────────────────────────────────────── */
 .date-filter {
