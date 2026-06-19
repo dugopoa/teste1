@@ -6,57 +6,57 @@ import SummaryCards from './components/SummaryCards'
 import CompanyChart from './components/CompanyChart'
 import RecordsTable from './components/RecordsTable'
 import { parseExcelFile, processRows } from './utils/excelParser'
-import { SAMPLE_DATA } from './utils/sampleData'
+import { SAMPLE_DATA, SAMPLE_HEADERS, SAMPLE_COLUMN_MAP } from './utils/sampleData'
 import './App.css'
 
 const PERIOD_LABELS = {
-  today: 'Hoje',
+  today:   'Hoje',
   '7days': 'Últimos 7 dias',
-  '30days': 'Últimos 30 dias',
-  month: 'Este mês',
-  custom: 'Período personalizado',
-  all: 'Todos os registros',
+  '30days':'Últimos 30 dias',
+  month:   'Este mês',
+  custom:  'Período personalizado',
+  all:     'Todos os registros',
 }
 
 function applyDateFilter(data, filter, range) {
-  const now = new Date()
+  const now   = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
   if (filter === 'today') {
-    return data.filter(r => r.dateTime && r.dateTime >= today)
+    return data.filter(r => r._dateTime && r._dateTime >= today)
   }
   if (filter === '7days') {
     const cut = new Date(today); cut.setDate(cut.getDate() - 6)
-    return data.filter(r => r.dateTime && r.dateTime >= cut)
+    return data.filter(r => r._dateTime && r._dateTime >= cut)
   }
   if (filter === '30days') {
     const cut = new Date(today); cut.setDate(cut.getDate() - 29)
-    return data.filter(r => r.dateTime && r.dateTime >= cut)
+    return data.filter(r => r._dateTime && r._dateTime >= cut)
   }
   if (filter === 'month') {
     const start = new Date(now.getFullYear(), now.getMonth(), 1)
-    return data.filter(r => r.dateTime && r.dateTime >= start)
+    return data.filter(r => r._dateTime && r._dateTime >= start)
   }
   if (filter === 'custom' && range.start && range.end) {
     const s = new Date(range.start)
     const e = new Date(range.end); e.setHours(23, 59, 59, 999)
-    return data.filter(r => r.dateTime && r.dateTime >= s && r.dateTime <= e)
+    return data.filter(r => r._dateTime && r._dateTime >= s && r._dateTime <= e)
   }
   return data
 }
 
 export default function App() {
-  const [rawRows, setRawRows]             = useState(null)
-  const [headers, setHeaders]             = useState([])
-  const [columnMap, setColumnMap]         = useState(null)
-  const [needsMapping, setNeedsMapping]   = useState(false)
-  const [fileName, setFileName]           = useState('')
-  const [error, setError]                 = useState('')
-  const [loading, setLoading]             = useState(false)
-  const [usingSample, setUsingSample]     = useState(false)
-  const [dateFilter, setDateFilter]       = useState('today')
-  const [customRange, setCustomRange]     = useState({ start: '', end: '' })
-  const [search, setSearch]               = useState('')
+  const [rawRows, setRawRows]           = useState(null)
+  const [headers, setHeaders]           = useState([])
+  const [columnMap, setColumnMap]       = useState(null)
+  const [needsMapping, setNeedsMapping] = useState(false)
+  const [fileName, setFileName]         = useState('')
+  const [error, setError]               = useState('')
+  const [loading, setLoading]           = useState(false)
+  const [usingSample, setUsingSample]   = useState(false)
+  const [dateFilter, setDateFilter]     = useState('today')
+  const [customRange, setCustomRange]   = useState({ start: '', end: '' })
+  const [search, setSearch]             = useState('')
 
   const handleFile = useCallback(async (file) => {
     setLoading(true)
@@ -65,15 +65,12 @@ export default function App() {
     setColumnMap(null)
     setUsingSample(false)
     try {
-      const { headers, rows, detectedMap } = await parseExcelFile(file)
+      const { headers: h, rows, detectedMap } = await parseExcelFile(file)
       setFileName(file.name)
-      setHeaders(headers)
+      setHeaders(h)
       setRawRows(rows)
-      if (detectedMap) {
-        setColumnMap(detectedMap)
-      } else {
-        setNeedsMapping(true)
-      }
+      if (detectedMap) setColumnMap(detectedMap)
+      else setNeedsMapping(true)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -90,10 +87,11 @@ export default function App() {
     setUsingSample(true)
     setError('')
     setNeedsMapping(false)
-    setColumnMap(null)
     setRawRows(null)
     setFileName('')
     setDateFilter('7days')
+    setHeaders(SAMPLE_HEADERS)
+    setColumnMap(SAMPLE_COLUMN_MAP)
   }
 
   const resetDashboard = () => {
@@ -101,10 +99,13 @@ export default function App() {
     setUsingSample(false)
     setFileName('')
     setColumnMap(null)
+    setHeaders([])
     setNeedsMapping(false)
     setError('')
+    setSearch('')
   }
 
+  // Cada linha do Excel = 1 registro
   const processedData = useMemo(() => {
     if (usingSample) return SAMPLE_DATA
     if (!rawRows || !columnMap) return []
@@ -115,31 +116,33 @@ export default function App() {
     const dateFiltered = applyDateFilter(processedData, dateFilter, customRange)
     if (!search.trim()) return dateFiltered
     const q = search.toLowerCase()
-    return dateFiltered.filter(r => r.company.toLowerCase().includes(q))
-  }, [processedData, dateFilter, customRange, search])
+    return dateFiltered.filter(r =>
+      headers.some(h => String(r[h] ?? '').toLowerCase().includes(q))
+    )
+  }, [processedData, dateFilter, customRange, search, headers])
 
+  // Total = nº de linhas; valor = linhas × 0,13
   const summary = useMemo(() => {
-    const totalRecords = filteredData.reduce((s, r) => s + r.records, 0)
-    const totalValue   = filteredData.reduce((s, r) => s + r.value, 0)
+    const totalRecords = filteredData.length
+    const totalValue   = +(filteredData.length * 0.13).toFixed(2)
 
     const byCompany = {}
     for (const r of filteredData) {
-      if (!byCompany[r.company]) byCompany[r.company] = { records: 0, value: 0 }
-      byCompany[r.company].records += r.records
-      byCompany[r.company].value   += r.value
+      const co = r._company
+      if (!byCompany[co]) byCompany[co] = { records: 0, value: 0 }
+      byCompany[co].records += 1
+      byCompany[co].value    = +(byCompany[co].value + 0.13).toFixed(2)
     }
 
     const companies = Object.entries(byCompany)
-      .map(([name, s]) => ({ name, ...s, pct: totalRecords > 0 ? (s.records / totalRecords) * 100 : 0 }))
+      .map(([name, s]) => ({
+        name,
+        ...s,
+        pct: totalRecords > 0 ? (s.records / totalRecords) * 100 : 0,
+      }))
       .sort((a, b) => b.records - a.records)
 
-    return {
-      totalRecords,
-      totalValue,
-      companies,
-      topCompany: companies[0] ?? null,
-      uniqueCompanies: companies.length,
-    }
+    return { totalRecords, totalValue, companies, topCompany: companies[0] ?? null, uniqueCompanies: companies.length }
   }, [filteredData])
 
   const hasData = usingSample || (rawRows && columnMap)
@@ -195,13 +198,19 @@ export default function App() {
 
             <CompanyChart companies={summary.companies} />
 
-            <RecordsTable data={filteredData} search={search} onSearch={setSearch} />
+            <RecordsTable
+              data={filteredData}
+              headers={headers}
+              columnMap={columnMap}
+              search={search}
+              onSearch={setSearch}
+            />
           </>
         )}
       </main>
 
       <footer className="footer">
-        <span>Valor unitário: R$ 0,13 por registro</span>
+        <span>Valor unitário: R$ 0,13 por linha</span>
         <span className="footer-dot">·</span>
         <span>Dashboard de Registros © {new Date().getFullYear()}</span>
       </footer>

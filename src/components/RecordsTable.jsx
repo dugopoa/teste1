@@ -2,29 +2,36 @@ import { useState, useMemo } from 'react'
 import { formatDateTime, formatNumber, formatCurrency } from '../utils/formatters'
 
 const PAGE_SIZE = 15
+const VALUE_PER_ROW = 0.13
 
-export default function RecordsTable({ data, search, onSearch }) {
-  const [sortKey, setSortKey] = useState('dateTime')
+export default function RecordsTable({ data, headers, columnMap, search, onSearch }) {
+  const dateTimeCol = columnMap?.dateTime ?? null
+
+  // Default sort: date descending
+  const [sortKey, setSortKey] = useState('_dateTime')
   const [sortDir, setSortDir] = useState('desc')
-  const [page, setPage] = useState(1)
+  const [page, setPage]       = useState(1)
 
   const handleSort = (key) => {
-    if (sortKey === key) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSortKey(key)
-      setSortDir('asc')
-    }
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
     setPage(1)
   }
 
+  // Map header click → internal sort key
+  const sortKeyFor = (header) => header === dateTimeCol ? '_dateTime' : header
+
   const sorted = useMemo(() => {
     return [...data].sort((a, b) => {
-      let av = a[sortKey], bv = b[sortKey]
-      if (av instanceof Date) av = av?.getTime() ?? 0
-      if (bv instanceof Date) bv = bv?.getTime() ?? 0
-      if (typeof av === 'string') av = av.toLowerCase()
-      if (typeof bv === 'string') bv = bv.toLowerCase()
+      let av = sortKey === '_dateTime' ? (a._dateTime?.getTime() ?? 0) : String(a[sortKey] ?? '').toLowerCase()
+      let bv = sortKey === '_dateTime' ? (b._dateTime?.getTime() ?? 0) : String(b[sortKey] ?? '').toLowerCase()
+
+      // Try numeric comparison for non-date columns
+      if (sortKey !== '_dateTime') {
+        const an = parseFloat(av), bn = parseFloat(bv)
+        if (!isNaN(an) && !isNaN(bn)) { av = an; bv = bn }
+      }
+
       if (av < bv) return sortDir === 'asc' ? -1 : 1
       if (av > bv) return sortDir === 'asc' ? 1 : -1
       return 0
@@ -32,25 +39,29 @@ export default function RecordsTable({ data, search, onSearch }) {
   }, [data, sortKey, sortDir])
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
-  const pageData = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const pageData   = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  const totalRecords = data.reduce((s, r) => s + r.records, 0)
-  const totalValue   = data.reduce((s, r) => s + r.value, 0)
+  const totalValue = data.length * VALUE_PER_ROW
 
   const SortIcon = ({ col }) => {
-    if (sortKey !== col) return <span className="sort-icon muted">⇅</span>
+    const key = sortKeyFor(col)
+    if (sortKey !== key) return <span className="sort-icon muted">⇅</span>
     return <span className="sort-icon">{sortDir === 'asc' ? '↑' : '↓'}</span>
   }
 
-  const Th = ({ col, children, align = 'left' }) => (
-    <th
-      className={`th-sort`}
-      style={{ textAlign: align }}
-      onClick={() => handleSort(col)}
-    >
-      {children} <SortIcon col={col} />
+  const Th = ({ col, align = 'left', children }) => (
+    <th className="th-sort" style={{ textAlign: align }} onClick={() => handleSort(sortKeyFor(col))}>
+      {children ?? col} <SortIcon col={col} />
     </th>
   )
+
+  const cellValue = (row, header) => {
+    if (header === dateTimeCol) return formatDateTime(row._dateTime)
+    const v = row[header]
+    if (v == null) return '—'
+    if (v instanceof Date) return formatDateTime(v)
+    return String(v)
+  }
 
   return (
     <div className="card">
@@ -60,11 +71,11 @@ export default function RecordsTable({ data, search, onSearch }) {
           <input
             className="search-input"
             type="text"
-            placeholder="Buscar empresa..."
+            placeholder="Filtrar..."
             value={search}
             onChange={e => { onSearch(e.target.value); setPage(1) }}
           />
-          <span className="result-count">{formatNumber(data.length)} registros</span>
+          <span className="result-count">{formatNumber(data.length)} linhas</span>
         </div>
       </div>
 
@@ -72,34 +83,36 @@ export default function RecordsTable({ data, search, onSearch }) {
         <table className="records-table">
           <thead>
             <tr>
-              <Th col="dateTime">Data e Hora de Inserção</Th>
-              <Th col="company">Nome da Empresa</Th>
-              <Th col="records" align="right">Nº de Registros</Th>
-              <Th col="value" align="right">Valor Total</Th>
+              {headers.map(h => <Th key={h} col={h}>{h}</Th>)}
+              <th style={{ textAlign: 'right', minWidth: 110 }}>Valor</th>
             </tr>
           </thead>
           <tbody>
             {pageData.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="td-empty">Nenhum registro encontrado</td>
-              </tr>
+              <tr><td colSpan={headers.length + 1} className="td-empty">Nenhum registro encontrado</td></tr>
             ) : pageData.map((row, i) => (
               <tr key={i} className={i % 2 === 0 ? 'row-even' : 'row-odd'}>
-                <td>{formatDateTime(row.dateTime)}</td>
-                <td>
-                  <span className="company-badge">{row.company}</span>
-                </td>
-                <td className="td-right">{formatNumber(row.records)}</td>
-                <td className="td-right value-cell">{formatCurrency(row.value)}</td>
+                {headers.map(h => (
+                  <td key={h} className={h === dateTimeCol ? '' : ''}>
+                    {h === columnMap?.company
+                      ? <span className="company-badge">{cellValue(row, h)}</span>
+                      : cellValue(row, h)
+                    }
+                  </td>
+                ))}
+                <td className="td-right value-cell">{formatCurrency(VALUE_PER_ROW)}</td>
               </tr>
             ))}
           </tbody>
           {data.length > 0 && (
             <tfoot>
               <tr className="tfoot-row">
-                <td colSpan={2}><strong>Total ({formatNumber(data.length)} lotes)</strong></td>
-                <td className="td-right"><strong>{formatNumber(totalRecords)}</strong></td>
-                <td className="td-right value-cell"><strong>{formatCurrency(totalValue)}</strong></td>
+                <td colSpan={Math.max(1, headers.length)}>
+                  <strong>Total — {formatNumber(data.length)} registros</strong>
+                </td>
+                <td className="td-right value-cell">
+                  <strong>{formatCurrency(totalValue)}</strong>
+                </td>
               </tr>
             </tfoot>
           )}

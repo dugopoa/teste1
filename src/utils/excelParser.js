@@ -2,8 +2,7 @@ import * as XLSX from 'xlsx'
 
 const HINTS = {
   dateTime: ['data e hora', 'datahora', 'data_hora', 'data hora', 'inserção', 'insercao', 'datetime', 'timestamp', 'data/hora'],
-  company: ['nome da empresa', 'empresa', 'razão social', 'razao social', 'cliente', 'company', 'nome'],
-  records: ['número de registros', 'numero de registros', 'num de registros', 'registros', 'quantidade', 'qtd', 'records', 'qtde'],
+  company:  ['nome da empresa', 'empresa', 'razão social', 'razao social', 'cliente', 'company', 'nome'],
 }
 
 function detectCol(headers, hints) {
@@ -34,14 +33,13 @@ export async function parseExcelFile(file) {
 
         const detected = {
           dateTime: detectCol(headers, HINTS.dateTime),
-          company: detectCol(headers, HINTS.company),
-          records: detectCol(headers, HINTS.records),
+          company:  detectCol(headers, HINTS.company),
         }
 
         resolve({
           headers,
           rows,
-          detectedMap: Object.values(detected).every(Boolean) ? detected : null,
+          detectedMap: (detected.dateTime && detected.company) ? detected : null,
         })
       } catch (e) {
         reject(e)
@@ -52,30 +50,26 @@ export async function parseExcelFile(file) {
   })
 }
 
+// Cada linha do Excel = 1 registro = R$ 0,13
 export function processRows(rows, colMap) {
-  return rows
-    .map(row => {
-      let dt = row[colMap.dateTime]
+  return rows.map(row => {
+    let dt = row[colMap.dateTime]
 
-      if (typeof dt === 'string') {
-        const m = dt.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/)
-        if (m) {
-          dt = new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0))
-        } else {
-          dt = new Date(dt)
-        }
+    if (typeof dt === 'string') {
+      const m = dt.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/)
+      if (m) {
+        dt = new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0))
+      } else {
+        dt = new Date(dt)
       }
+    }
+    if (dt instanceof Date && isNaN(dt.getTime())) dt = null
 
-      if (dt instanceof Date && isNaN(dt.getTime())) dt = null
-
-      const records = parseFloat(String(row[colMap.records] ?? 0).replace(',', '.')) || 0
-
-      return {
-        dateTime: dt,
-        company: String(row[colMap.company] ?? '').trim(),
-        records,
-        value: +(records * 0.13).toFixed(2),
-      }
-    })
-    .filter(r => r.company && r.records > 0)
+    return {
+      ...row,                                           // todas as colunas originais do Excel
+      _dateTime: dt,                                    // data parseada
+      _company:  String(row[colMap.company] ?? '').trim(),
+      _value:    0.13,                                  // R$ 0,13 por linha
+    }
+  }).filter(r => r._company)
 }
