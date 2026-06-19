@@ -11,8 +11,10 @@ function KpiCard({ icon, label, value, sub, accentColor, valueClass }) {
   )
 }
 
-export default function SummaryCards({ summary, periodLabel }) {
+export default function SummaryCards({ summary, periodLabel, totalInFile }) {
   const { totalRecords, totalValue, uniqueCompanies, topCompany } = summary
+
+  const isFiltered = totalInFile != null && totalInFile !== totalRecords
 
   return (
     <div className="summary-section">
@@ -22,14 +24,20 @@ export default function SummaryCards({ summary, periodLabel }) {
           icon="📊"
           label="Total de Registros"
           value={formatNumber(totalRecords)}
-          sub={`R$ 0,13 por registro`}
+          sub={
+            isFiltered
+              ? `${formatNumber(totalInFile)} linhas no arquivo`
+              : `${formatNumber(totalRecords)} linhas no arquivo`
+          }
           accentColor="#001729"
         />
         <KpiCard
           icon="💰"
           label="Valor Total"
           value={formatCurrency(totalValue)}
-          sub="0,13 × registros"
+          sub={isFiltered
+            ? `total arquivo: ${formatCurrency(totalInFile * 0.13)}`
+            : `R$ 0,13 × ${formatNumber(totalRecords)} linhas`}
           accentColor="#9dd70f"
           valueClass="currency"
         />

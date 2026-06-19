@@ -73,7 +73,7 @@ export default function App() {
       setHeaders(h)
       setRawRows(rows)
       setColumnMap(detectedMap)          // sempre avança — detectedMap pode ter null parcial
-      setDateFilter(detectedMap?.dateTime ? 'today' : 'all')
+      setDateFilter('all')               // exibe todos os registros ao carregar
     } catch (e) {
       setError(e.message)
     } finally {
@@ -224,7 +224,11 @@ export default function App() {
               />
             )}
 
-            <SummaryCards summary={summary} periodLabel={PERIOD_LABELS[dateFilter] ?? 'Todos'} />
+            <SummaryCards
+              summary={summary}
+              periodLabel={PERIOD_LABELS[dateFilter] ?? 'Todos'}
+              totalInFile={processedData.length}
+            />
 
             {hasCo && <CompanyChart companies={summary.companies} />}
 
