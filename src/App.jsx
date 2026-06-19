@@ -147,10 +147,10 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <div className="header-logo">📋</div>
+        <div className="header-logo">X4</div>
         <div className="header-text">
           <h1>Dashboard de Registros</h1>
-          <span className="header-sub">Controle de envios por empresa</span>
+          <span className="header-sub">Tecnologia | IA — Controle de Envios</span>
         </div>
         {hasData && (
           <button className="btn btn-ghost" onClick={resetDashboard}>

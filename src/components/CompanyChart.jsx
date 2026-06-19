@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 import { formatNumber, formatCurrency, formatPercent } from '../utils/formatters'
 
-const COLORS = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#db2777', '#65a30d', '#ea580c', '#4f46e5']
+const COLORS = ['#9dd70f', '#001729', '#2b2e38', '#7ab80b', '#003d66', '#4a5568', '#c4f040', '#002a47', '#6b8f00', '#3d4150']
 
 const CustomTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null
